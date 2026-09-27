@@ -3,7 +3,7 @@ FROM node:22-alpine AS frontend-build
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
-RUN npm ci
+RUN if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
 
 COPY frontend/ ./
 RUN npm run build
@@ -15,7 +15,7 @@ WORKDIR /app
 
 COPY backend/package*.json ./backend/
 WORKDIR /app/backend
-RUN npm ci --omit=dev
+RUN if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi --omit=dev
 
 COPY backend/ /app/backend/
 COPY --from=frontend-build /app/frontend/dist /app/frontend/dist
