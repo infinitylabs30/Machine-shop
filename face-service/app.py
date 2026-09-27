@@ -199,11 +199,12 @@ def verify():
         }), 400
 
 
-if __name__ == "__main__":
-    initialize_models()
+# Initialize models when imported by Gunicorn or run directly.
+initialize_models()
 
+if __name__ == "__main__":
     app.run(
-        host="127.0.0.1",
-        port=5100,
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", "5100")),
         debug=False
     )
