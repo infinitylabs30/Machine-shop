@@ -68,15 +68,19 @@ const [passwordChangeLoading, setPasswordChangeLoading] = useState(false);
     }, []);
 
     const navItems =
-        authUser?.role === "admin"
-            ? [
-                  { id: "dashboard", label: "Dashboard", icon: "⌂" },
-                  { id: "attendance", label: "Attendance", icon: "◷" },
-                  { id: "employees", label: "Employees", icon: "♙" },
-                  { id: "production", label: "Production", icon: "▦" },
-                  { id: "reports", label: "Reports", icon: "◫" },
-              ]
-            : [{ id: "attendance", label: "Attendance", icon: "◷" }];
+    authUser?.role === "admin"
+        ? [
+              { id: "dashboard", label: "Dashboard", icon: "⌂" },
+              { id: "attendance", label: "Attendance", icon: "◷" },
+              { id: "employees", label: "Employees", icon: "♙" },
+              { id: "production", label: "Production", icon: "▦" },
+              { id: "reports", label: "Reports", icon: "◫" },
+          ]
+        : [
+              { id: "attendance", label: "Attendance", icon: "◷" },
+              { id: "production", label: "Production", icon: "▦" },
+              { id: "reports", label: "Reports", icon: "◫" },
+          ];
         async function apiFetch(path, options = {}) {
         const headers = new Headers(options.headers || {});
         if (authToken) {
@@ -574,7 +578,7 @@ const [passwordChangeLoading, setPasswordChangeLoading] = useState(false);
         }
 
         if (page === "production") {
-            return <ProductionPage token={authToken} />;
+            return <ProductionPage token={authToken} authUser={authUser} />;
         }
 
         if (page === "reports") {
@@ -1192,6 +1196,7 @@ function EmployeesPage({ token, onRegisterFace }) {
     const [employeeCode, setEmployeeCode] = useState("");
     const [fullName, setFullName] = useState("");
     const [phone, setPhone] = useState("");
+    const [designation, setDesignation] = useState("Worker");
 
     async function loadEmployees() {
         setLoading(true);
@@ -1238,6 +1243,7 @@ function EmployeesPage({ token, onRegisterFace }) {
                     employeeCode,
                     fullName,
                     phone,
+                    designation,
                 }),
             });
 
@@ -1252,6 +1258,7 @@ function EmployeesPage({ token, onRegisterFace }) {
             setEmployeeCode("");
             setFullName("");
             setPhone("");
+            setDesignation("Worker");
             setShowAddForm(false);
             await loadEmployees();
         } catch (err) {
@@ -1370,6 +1377,9 @@ function EmployeesPage({ token, onRegisterFace }) {
 
                                 <div>
                                     <strong>{employee.full_name}</strong>
+                                    <small>
+                                        {employee.designation || "Worker"}
+                                    </small>
                                     <small>
                                         {employee.phone || "No phone number"}
                                     </small>
@@ -1498,6 +1508,21 @@ function EmployeesPage({ token, onRegisterFace }) {
                                 }
                                 placeholder="Phone number"
                                 maxLength={20}
+                            />
+
+                            <label htmlFor="new-employee-designation">
+                                Designation
+                            </label>
+                            <input
+                                id="new-employee-designation"
+                                className="text-input"
+                                value={designation}
+                                onChange={(event) =>
+                                    setDesignation(event.target.value)
+                                }
+                                placeholder="e.g. Worker, Supervisor, Manager"
+                                maxLength={100}
+                                required
                             />
 
                             {error && (

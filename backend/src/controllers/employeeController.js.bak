@@ -9,7 +9,6 @@ async function getEmployees(req, res) {
                 employee_code,
                 full_name,
                 phone,
-                designation,
                 is_active,
                 face_registered_at,
                 (face_embedding IS NOT NULL) AS face_registered,
@@ -33,12 +32,7 @@ async function getEmployees(req, res) {
 }
 
 async function createEmployee(req, res) {
-    const {
-        employeeCode,
-        fullName,
-        phone,
-        designation = "Worker",
-    } = req.body;
+    const { employeeCode, fullName, phone } = req.body;
 
     if (
         typeof employeeCode !== "string" ||
@@ -52,19 +46,7 @@ async function createEmployee(req, res) {
         });
     }
 
-    if (
-        typeof designation !== "string" ||
-        !designation.trim() ||
-        designation.trim().length > 100
-    ) {
-        return res.status(400).json({
-            success: false,
-            message: "Designation is required and must be 100 characters or fewer",
-        });
-    }
-
     const normalizedCode = employeeCode.trim().toUpperCase();
-    const normalizedDesignation = designation.trim();
     const username = normalizedCode.toLowerCase();
     const initialPassword = `precise@${normalizedCode}`;
 
@@ -72,6 +54,7 @@ async function createEmployee(req, res) {
 
     try {
         client = await pool.connect();
+
         await client.query("BEGIN");
 
         const employeeResult = await client.query(
@@ -79,16 +62,14 @@ async function createEmployee(req, res) {
             INSERT INTO employees (
                 employee_code,
                 full_name,
-                phone,
-                designation
+                phone
             )
-            VALUES ($1, $2, $3, $4)
+            VALUES ($1, $2, $3)
             RETURNING
                 id,
                 employee_code,
                 full_name,
                 phone,
-                designation,
                 is_active,
                 face_registered_at,
                 (face_embedding IS NOT NULL) AS face_registered,
@@ -98,7 +79,6 @@ async function createEmployee(req, res) {
                 normalizedCode,
                 fullName.trim(),
                 typeof phone === "string" ? phone.trim() || null : null,
-                normalizedDesignation,
             ]
         );
 

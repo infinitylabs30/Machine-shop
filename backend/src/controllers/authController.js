@@ -40,7 +40,8 @@ async function login(req, res) {
                 u.is_active,
                 u.must_change_password,
                 e.employee_code,
-                e.full_name
+                e.full_name,
+                e.designation
              FROM app_users u
              LEFT JOIN employees e ON e.id = u.employee_id
              WHERE u.username = $1
@@ -83,6 +84,7 @@ async function login(req, res) {
                 employeeId: user.employee_id,
                 employeeCode: user.employee_code,
                 fullName: user.full_name,
+                designation: user.designation || "Worker",
                 mustChangePassword: user.must_change_password,
             },
         });
@@ -106,7 +108,8 @@ async function getCurrentUser(req, res) {
                 u.employee_id,
                 u.must_change_password,
                 e.employee_code,
-                e.full_name
+                e.full_name,
+                e.designation
              FROM app_users u
              LEFT JOIN employees e ON e.id = u.employee_id
              WHERE u.id = $1
@@ -133,6 +136,7 @@ async function getCurrentUser(req, res) {
                 employeeId: user.employee_id,
                 employeeCode: user.employee_code,
                 fullName: user.full_name,
+                designation: user.designation || "Worker",
                 mustChangePassword: user.must_change_password,
             },
         });
