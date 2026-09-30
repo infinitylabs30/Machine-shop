@@ -1,4 +1,5 @@
 const pool = require("../config/database");
+const bcrypt = require("bcryptjs");
 
 async function getEmployees(req, res) {
     try {
@@ -21,7 +22,8 @@ async function getEmployees(req, res) {
             employees: result.rows,
         });
     } catch (error) {
-       console.error("Get employees failed:", error.message);
+        console.error("Get employees failed:", error.message);
+
         return res.status(500).json({
             success: false,
             message: "Failed to retrieve employees",
@@ -30,22 +32,32 @@ async function getEmployees(req, res) {
 }
 
 async function createEmployee(req, res) {
+    const { employeeCode, fullName, phone } = req.body;
+
+    if (
+        typeof employeeCode !== "string" ||
+        !employeeCode.trim() ||
+        typeof fullName !== "string" ||
+        !fullName.trim()
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Employee code and full name are required",
+        });
+    }
+
+    const normalizedCode = employeeCode.trim().toUpperCase();
+    const username = normalizedCode.toLowerCase();
+    const initialPassword = `precise@${normalizedCode}`;
+
+    let client;
+
     try {
-        const { employeeCode, fullName, phone } = req.body;
+        client = await pool.connect();
 
-        if (
-            typeof employeeCode !== "string" ||
-            !employeeCode.trim() ||
-            typeof fullName !== "string" ||
-            !fullName.trim()
-        ) {
-            return res.status(400).json({
-                success: false,
-                message: "Employee code and full name are required",
-            });
-        }
+        await client.query("BEGIN");
 
-        const result = await pool.query(
+        const employeeResult = await client.query(
             `
             INSERT INTO employees (
                 employee_code,
@@ -64,22 +76,51 @@ async function createEmployee(req, res) {
                 created_at
             `,
             [
-                employeeCode.trim().toUpperCase(),
+                normalizedCode,
                 fullName.trim(),
-                phone?.trim() || null,
+                typeof phone === "string" ? phone.trim() || null : null,
             ]
         );
 
+        const employee = employeeResult.rows[0];
+        const passwordHash = await bcrypt.hash(initialPassword, 12);
+
+        await client.query(
+            `
+            INSERT INTO app_users (
+                username,
+                password_hash,
+                role,
+                employee_id,
+                must_change_password
+            )
+            VALUES ($1, $2, 'employee', $3, TRUE)
+            `,
+            [username, passwordHash, employee.id]
+        );
+
+        await client.query("COMMIT");
+
         return res.status(201).json({
             success: true,
-            message: "Employee added successfully",
-            employee: result.rows[0],
+            message: "Employee and login account created successfully",
+            employee,
+            credentials: {
+                username,
+                initialPassword,
+                mustChangePassword: true,
+            },
         });
     } catch (error) {
+        if (client) {
+            await client.query("ROLLBACK");
+        }
+
         if (error.code === "23505") {
             return res.status(409).json({
                 success: false,
-                message: "An employee with this code already exists",
+                message:
+                    "This employee ID or login ID already exists. Please use a unique ID.",
             });
         }
 
@@ -87,8 +128,12 @@ async function createEmployee(req, res) {
 
         return res.status(500).json({
             success: false,
-            message: "Failed to add employee",
+            message: "Failed to create employee and login account",
         });
+    } finally {
+        if (client) {
+            client.release();
+        }
     }
 }
 

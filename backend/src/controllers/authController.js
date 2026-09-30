@@ -8,6 +8,7 @@ async function login(req, res) {
             typeof req.body.username === "string"
                 ? req.body.username.trim().toLowerCase()
                 : "";
+
         const password =
             typeof req.body.password === "string"
                 ? req.body.password
@@ -22,6 +23,7 @@ async function login(req, res) {
 
         if (!process.env.JWT_SECRET) {
             console.error("JWT_SECRET is not configured");
+
             return res.status(500).json({
                 success: false,
                 message: "Authentication is not configured",
@@ -36,6 +38,7 @@ async function login(req, res) {
                 u.role,
                 u.employee_id,
                 u.is_active,
+                u.must_change_password,
                 e.employee_code,
                 e.full_name
              FROM app_users u
@@ -80,10 +83,12 @@ async function login(req, res) {
                 employeeId: user.employee_id,
                 employeeCode: user.employee_code,
                 fullName: user.full_name,
+                mustChangePassword: user.must_change_password,
             },
         });
     } catch (error) {
         console.error("Login error:", error.message);
+
         return res.status(500).json({
             success: false,
             message: "Unable to log in",
@@ -99,6 +104,7 @@ async function getCurrentUser(req, res) {
                 u.username,
                 u.role,
                 u.employee_id,
+                u.must_change_password,
                 e.employee_code,
                 e.full_name
              FROM app_users u
@@ -116,12 +122,23 @@ async function getCurrentUser(req, res) {
             });
         }
 
+        const user = result.rows[0];
+
         return res.json({
             success: true,
-            user: result.rows[0],
+            user: {
+                id: user.id,
+                username: user.username,
+                role: user.role,
+                employeeId: user.employee_id,
+                employeeCode: user.employee_code,
+                fullName: user.full_name,
+                mustChangePassword: user.must_change_password,
+            },
         });
     } catch (error) {
         console.error("Current user lookup error:", error.message);
+
         return res.status(500).json({
             success: false,
             message: "Unable to retrieve account",
@@ -129,4 +146,96 @@ async function getCurrentUser(req, res) {
     }
 }
 
-module.exports = { login, getCurrentUser };
+async function changePassword(req, res) {
+    try {
+        const currentPassword =
+            typeof req.body.currentPassword === "string"
+                ? req.body.currentPassword
+                : "";
+
+        const newPassword =
+            typeof req.body.newPassword === "string"
+                ? req.body.newPassword
+                : "";
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "Current password and new password are required",
+            });
+        }
+
+        if (newPassword.length < 8) {
+            return res.status(400).json({
+                success: false,
+                message: "New password must be at least 8 characters long",
+            });
+        }
+
+        if (currentPassword === newPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "New password must be different from current password",
+            });
+        }
+
+        const result = await pool.query(
+            `SELECT id, password_hash
+             FROM app_users
+             WHERE id = $1
+               AND is_active = TRUE
+             LIMIT 1`,
+            [req.user.sub]
+        );
+
+        const user = result.rows[0];
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "Account is inactive or no longer exists",
+            });
+        }
+
+        const passwordMatches = await bcrypt.compare(
+            currentPassword,
+            user.password_hash
+        );
+
+        if (!passwordMatches) {
+            return res.status(401).json({
+                success: false,
+                message: "Current password is incorrect",
+            });
+        }
+
+        const passwordHash = await bcrypt.hash(newPassword, 12);
+
+        await pool.query(
+            `UPDATE app_users
+             SET password_hash = $1,
+                 must_change_password = FALSE,
+                 updated_at = NOW()
+             WHERE id = $2`,
+            [passwordHash, user.id]
+        );
+
+        return res.json({
+            success: true,
+            message: "Password changed successfully",
+        });
+    } catch (error) {
+        console.error("Change password error:", error.message);
+
+        return res.status(500).json({
+            success: false,
+            message: "Unable to change password",
+        });
+    }
+}
+
+module.exports = {
+    login,
+    getCurrentUser,
+    changePassword,
+};
