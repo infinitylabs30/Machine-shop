@@ -15,7 +15,7 @@ WORKDIR /app
 
 COPY backend/package*.json ./backend/
 WORKDIR /app/backend
-RUN if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi --omit=dev
+RUN npm ci --omit=dev
 
 COPY backend/ /app/backend/
 COPY --from=frontend-build /app/frontend/dist /app/frontend/dist
