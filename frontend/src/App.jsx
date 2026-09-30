@@ -16,6 +16,11 @@ function App() {
     const [loginPassword, setLoginPassword] = useState("");
     const [loginError, setLoginError] = useState("");
     const [loginLoading, setLoginLoading] = useState(false);
+    const [currentPassword, setCurrentPassword] = useState("");
+const [newPassword, setNewPassword] = useState("");
+const [confirmNewPassword, setConfirmNewPassword] = useState("");
+const [passwordChangeError, setPasswordChangeError] = useState("");
+const [passwordChangeLoading, setPasswordChangeLoading] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
     const [employeeCode, setEmployeeCode] = useState("");
     const [eventType, setEventType] = useState("ENTRY");
@@ -117,6 +122,61 @@ function App() {
             setLoginLoading(false);
         }
     }
+    async function handleChangePassword(event) {
+    event.preventDefault();
+    setPasswordChangeError("");
+
+    if (newPassword.length < 8) {
+        setPasswordChangeError(
+            "Your new password must be at least 8 characters long."
+        );
+        return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+        setPasswordChangeError("The new passwords do not match.");
+        return;
+    }
+
+    setPasswordChangeLoading(true);
+
+    try {
+        const response = await apiFetch("/api/auth/change-password", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                currentPassword,
+                newPassword,
+            }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || "Unable to change password.");
+        }
+
+        setAuthUser((previousUser) => ({
+            ...previousUser,
+            mustChangePassword: false,
+        }));
+
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmNewPassword("");
+        setPasswordChangeError("");
+
+        setPage(authUser?.role === "admin" ? "dashboard" : "attendance");
+    } catch (error) {
+        setPasswordChangeError(
+            error.message || "Unable to change password."
+        );
+    } finally {
+        setPasswordChangeLoading(false);
+    }
+}
 
     function handleLogout() {
         stopCamera();
@@ -524,6 +584,23 @@ function App() {
         return <Dashboard setPage={setPage} token={authToken} apiBase={API} />;
     }
 
+    if (authToken && authUser?.mustChangePassword) {
+    return (
+        <ChangePasswordPage
+            username={authUser.username}
+            currentPassword={currentPassword}
+            setCurrentPassword={setCurrentPassword}
+            newPassword={newPassword}
+            setNewPassword={setNewPassword}
+            confirmNewPassword={confirmNewPassword}
+            setConfirmNewPassword={setConfirmNewPassword}
+            onSubmit={handleChangePassword}
+            loading={passwordChangeLoading}
+            error={passwordChangeError}
+            onLogout={handleLogout}
+        />
+    );
+}
     if (!authToken || !authUser) {
         if (showLogin) {
             return (
@@ -1111,7 +1188,7 @@ function EmployeesPage({ token, onRegisterFace }) {
     const [showAddForm, setShowAddForm] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
-
+    const [createdCredentials, setCreatedCredentials] = useState(null);
     const [employeeCode, setEmployeeCode] = useState("");
     const [fullName, setFullName] = useState("");
     const [phone, setPhone] = useState("");
@@ -1170,7 +1247,8 @@ function EmployeesPage({ token, onRegisterFace }) {
                 throw new Error(data.message || "Unable to add employee.");
             }
 
-            setSuccess("Employee added successfully.");
+            setSuccess("Employee and login account created successfully.");
+            setCreatedCredentials(data.credentials || null);
             setEmployeeCode("");
             setFullName("");
             setPhone("");
@@ -1208,6 +1286,7 @@ function EmployeesPage({ token, onRegisterFace }) {
                     className="primary-button"
                     onClick={() => {
                         setError("");
+                        setCreatedCredentials(null);
                         setSuccess("");
                         setShowAddForm(true);
                     }}
@@ -1223,10 +1302,47 @@ function EmployeesPage({ token, onRegisterFace }) {
             )}
 
             {success && (
-                <div className="employee-alert success" role="status">
-                    {success}
-                </div>
-            )}
+    <div className="employee-alert success" role="status">
+        <strong>{success}</strong>
+
+        {createdCredentials && (
+            <div style={{ marginTop: "12px" }}>
+                <p>
+                    <strong>Employee login credentials</strong>
+                </p>
+
+                <p>
+                    Login ID:{" "}
+                    <strong>{createdCredentials.username}</strong>
+                </p>
+
+                <p>
+                    Initial password:{" "}
+                    <strong>{createdCredentials.initialPassword}</strong>
+                </p>
+
+                <p>
+                    <small>
+                        This is a temporary password. Ask the employee to
+                        change it after logging in.
+                    </small>
+                </p>
+
+                <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() =>
+                        navigator.clipboard.writeText(
+                            `Login ID: ${createdCredentials.username}\nInitial password: ${createdCredentials.initialPassword}`
+                        )
+                    }
+                >
+                    Copy credentials
+                </button>
+            </div>
+        )}
+    </div>
+)}
 
             <section className="panel employee-table">
                 <div className="table-header">
@@ -1673,6 +1789,102 @@ function Verification({ title, status, active, action }) {
                 <button onClick={action}>Detect</button>
             )}
         </div>
+    );
+}
+function ChangePasswordPage({
+    username,
+    currentPassword,
+    setCurrentPassword,
+    newPassword,
+    setNewPassword,
+    confirmNewPassword,
+    setConfirmNewPassword,
+    onSubmit,
+    loading,
+    error,
+    onLogout,
+}) {
+    return (
+        <main className="login-page">
+            <form className="login-card" onSubmit={onSubmit}>
+                <img
+                    src="/precis-logo.avif"
+                    alt="PRECIS"
+                    className="login-logo"
+                />
+
+                <span className="section-label">ACCOUNT SECURITY</span>
+                <h1>Change your password</h1>
+                <p>
+                    Welcome, {username}. Please replace your temporary
+                    password before continuing.
+                </p>
+
+                {error && (
+                    <div className="login-error" role="alert">
+                        {error}
+                    </div>
+                )}
+
+                <label>
+                    Current password
+                    <input
+                        type="password"
+                        autoComplete="current-password"
+                        value={currentPassword}
+                        onChange={(event) =>
+                            setCurrentPassword(event.target.value)
+                        }
+                        required
+                    />
+                </label>
+
+                <label>
+                    New password
+                    <input
+                        type="password"
+                        autoComplete="new-password"
+                        value={newPassword}
+                        onChange={(event) =>
+                            setNewPassword(event.target.value)
+                        }
+                        minLength={8}
+                        required
+                    />
+                </label>
+
+                <label>
+                    Confirm new password
+                    <input
+                        type="password"
+                        autoComplete="new-password"
+                        value={confirmNewPassword}
+                        onChange={(event) =>
+                            setConfirmNewPassword(event.target.value)
+                        }
+                        minLength={8}
+                        required
+                    />
+                </label>
+
+                <button
+                    className="primary-button"
+                    type="submit"
+                    disabled={loading}
+                >
+                    {loading ? "Changing password…" : "Change password"}
+                </button>
+
+                <button
+                    className="secondary-button full"
+                    type="button"
+                    onClick={onLogout}
+                    disabled={loading}
+                >
+                    Sign out
+                </button>
+            </form>
+        </main>
     );
 }
 function LoginPage({
