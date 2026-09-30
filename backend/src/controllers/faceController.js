@@ -62,12 +62,19 @@ async function registerEmployeeFace(req, res) {
             },
         });
     } catch (error) {
-        console.error("Face registration failed:", error.message);
+        const serviceMessage = error.response?.data?.message;
+        const serviceStatus = error.response?.status;
 
-return res.status(500).json({
-    success: false,
-    message: "Face registration failed",
-});
+        // Log only diagnostic metadata; never log the submitted face image.
+        console.error("Face registration failed:", {
+            message: serviceMessage || error.message,
+            serviceStatus: serviceStatus || null,
+        });
+
+        return res.status(serviceStatus === 400 ? 400 : 502).json({
+            success: false,
+            message: serviceMessage || "Face registration service is unavailable. Please try again.",
+        });
     }
 }
 
