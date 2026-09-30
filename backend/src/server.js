@@ -14,6 +14,7 @@ const employeeRoutes = require("./routes/employeeRoutes");
 const productionRoutes = require("./routes/productionRoutes");
 const authRoutes = require("./routes/authRoutes");
 const reportRoutes = require("./routes/reportRoutes");
+const dashboardRoutes = require("./routes/dashboardRoutes");
 
 const app = express();
 
@@ -28,6 +29,7 @@ app.use("/api/employees", employeeRoutes);
 app.use("/api/production", productionRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 app.get("/api/health", async (req, res) => {
     try {
@@ -69,6 +71,48 @@ app.get("/", (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
+// Keep the face service warm while this backend process is running.
+const faceServiceUrl = (process.env.FACE_SERVICE_URL || "").replace(/\/+$/, "");
+const faceServicePingIntervalMs = 5 * 60 * 1000;
+
+async function pingFaceService() {
+    if (!faceServiceUrl) {
+        console.warn("FACE_SERVICE_URL is not configured; keep-alive ping is disabled.");
+        return;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
+    try {
+        const response = await fetch(`${faceServiceUrl}/health`, {
+            method: "GET",
+            signal: controller.signal,
+        });
+
+        if (response.ok) {
+            console.log(`Face service keep-alive: healthy (HTTP ${response.status})`);
+        } else {
+            console.warn(`Face service keep-alive: HTTP ${response.status}`);
+        }
+    } catch (error) {
+        console.warn(`Face service keep-alive failed: ${error.message}`);
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+function scheduleFaceServicePing() {
+    setTimeout(async () => {
+        await pingFaceService();
+        scheduleFaceServicePing();
+    }, faceServicePingIntervalMs);
+}
+
 app.listen(PORT, "0.0.0.0", () => {
     console.log(`Foundry server listening on port ${PORT}`);
+
+    // Ping once on startup, then every five minutes.
+    pingFaceService();
+    scheduleFaceServicePing();
 });

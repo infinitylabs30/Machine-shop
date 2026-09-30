@@ -25,6 +25,7 @@ function App() {
     const [detectedLocation, setDetectedLocation] = useState(null);
     const [message, setMessage] = useState("");
     const [loading, setLoading] = useState(false);
+    const [dashboardGreeting, setDashboardGreeting] = useState("Good morning.");
 
     const [registeringEmployee, setRegisteringEmployee] = useState(null);
     const [registerCameraActive, setRegisterCameraActive] = useState(false);
@@ -38,6 +39,28 @@ function App() {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const streamRef = useRef(null);
+
+    useEffect(() => {
+        function updateGreeting() {
+            const hour = Number(
+                new Intl.DateTimeFormat("en-IN", {
+                    timeZone: "Asia/Kolkata",
+                    hour: "2-digit",
+                    hourCycle: "h23",
+                }).format(new Date())
+            );
+
+            setDashboardGreeting(
+                hour < 12 ? "Good morning." :
+                hour < 17 ? "Good afternoon." :
+                "Good evening."
+            );
+        }
+
+        updateGreeting();
+        const intervalId = setInterval(updateGreeting, 60_000);
+        return () => clearInterval(intervalId);
+    }, []);
 
     const navItems =
         authUser?.role === "admin"
@@ -498,7 +521,7 @@ function App() {
             return <ReportsPage token={authToken} apiBase={API} />;
         }
 
-        return <Dashboard setPage={setPage} />;
+        return <Dashboard setPage={setPage} token={authToken} apiBase={API} />;
     }
 
     if (!authToken || !authUser) {
@@ -611,7 +634,7 @@ return (
                         <p className="eyebrow">PRECIS / FOUNDRY OPERATIONS</p>
                         <h1>
                             {page === "dashboard"
-                                ? "Good evening."
+                                ? dashboardGreeting
                                 : navItems.find((item) => item.id === page)?.label}
                         </h1>
                     </div>
@@ -671,16 +694,65 @@ return (
     );
 }
 
-function Dashboard({ setPage }) {
+function Dashboard({ setPage, token, apiBase }) {
+    const [dashboardData, setDashboardData] = useState(null);
+    const [dashboardLoading, setDashboardLoading] = useState(true);
+    const [dashboardError, setDashboardError] = useState("");
+
+    useEffect(() => {
+        let active = true;
+
+        async function loadDashboard() {
+            setDashboardLoading(true);
+            setDashboardError("");
+
+            try {
+                const response = await fetch(`${apiBase}/api/dashboard/summary`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || "Could not load dashboard data.");
+                }
+
+                if (active) setDashboardData(data);
+            } catch (error) {
+                if (active) setDashboardError(error.message || "Dashboard data unavailable.");
+            } finally {
+                if (active) setDashboardLoading(false);
+            }
+        }
+
+        loadDashboard();
+        return () => { active = false; };
+    }, [token, apiBase]);
+
+    const summary = dashboardData?.summary || {};
+    const activity = dashboardData?.recentActivity || [];
+
+    function formatTime(value) {
+        if (!value) return "—";
+        return new Intl.DateTimeFormat("en-IN", {
+            timeZone: "Asia/Kolkata",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true,
+        }).format(new Date(value));
+    }
+
+    const metricValue = (value) =>
+        dashboardLoading ? "…" : dashboardError ? "—" : (value ?? 0);
+
     return (
         <>
             <section className="hero">
                 <div>
                     <span className="hero-tag">LIVE OPERATIONS</span>
-                    <h2>Everything under control.</h2>
+                    <h2>Foundry operations at a glance.</h2>
                     <p>
-                        Monitor attendance, workforce activity and plant operations
-                        from one intelligent workspace.
+                        Attendance and production totals are loaded from recorded
+                        activity for today (India Standard Time).
                     </p>
                 </div>
 
@@ -692,30 +764,43 @@ function Dashboard({ setPage }) {
                 </button>
             </section>
 
+            {dashboardError && (
+                <div className="production-message" role="alert">
+                    {dashboardError}
+                    <button
+                        type="button"
+                        className="text-button"
+                        onClick={() => window.location.reload()}
+                    >
+                        Reload
+                    </button>
+                </div>
+            )}
+
             <div className="metrics-grid">
                 <Metric
-                    label="Present today"
-                    value="42"
-                    change="+8.4%"
-                    description="vs. previous working day"
+                    label="Employees with latest ENTRY today"
+                    value={metricValue(summary.checked_in)}
+                    change="Today · IST"
+                    description="Latest attendance event recorded today is ENTRY"
                 />
                 <Metric
                     label="Entries"
-                    value="38"
-                    change="Today"
-                    description="verified check-ins"
+                    value={metricValue(summary.entries)}
+                    change="Today · IST"
+                    description="Recorded check-in events"
                 />
                 <Metric
                     label="Exits"
-                    value="31"
-                    change="Today"
-                    description="verified check-outs"
+                    value={metricValue(summary.exits)}
+                    change="Today · IST"
+                    description="Recorded check-out events"
                 />
                 <Metric
-                    label="Units online"
-                    value="01"
-                    change="Operational"
-                    description="Shiroli production unit"
+                    label="Production output"
+                    value={metricValue(summary.production_output)}
+                    change="Today"
+                    description="Total actual quantity entered"
                 />
             </div>
 
@@ -724,64 +809,84 @@ function Dashboard({ setPage }) {
                     <div className="panel-heading">
                         <div>
                             <span className="section-label">ATTENDANCE</span>
-                            <h3>Today's activity</h3>
+                            <h3>Today's recent activity</h3>
                         </div>
                         <button
                             className="text-button"
                             onClick={() => setPage("attendance")}
                         >
-                            View all →
+                            View attendance →
                         </button>
                     </div>
 
                     <div className="attendance-list">
-                        <AttendanceRow
-                            name="Employee 001"
-                            id="TEST001"
-                            type="ENTRY"
-                            time="09:08 AM"
-                        />
-                        <AttendanceRow
-                            name="Employee 002"
-                            id="EMP002"
-                            type="ENTRY"
-                            time="09:14 AM"
-                        />
-                        <AttendanceRow
-                            name="Employee 003"
-                            id="EMP003"
-                            type="EXIT"
-                            time="06:02 PM"
-                        />
-                        <AttendanceRow
-                            name="Employee 004"
-                            id="EMP004"
-                            type="ENTRY"
-                            time="09:27 AM"
-                        />
+                        {dashboardLoading ? (
+                            <p className="report-note">Loading today's activity…</p>
+                        ) : activity.length === 0 ? (
+                            <p className="report-note">
+                                No attendance events have been recorded today.
+                            </p>
+                        ) : (
+                            activity.map((event) => (
+                                <AttendanceRow
+                                    key={event.id}
+                                    name={event.employee_name}
+                                    id={`${event.employee_code} · ${event.location_name}`}
+                                    type={event.event_type}
+                                    time={formatTime(event.event_time)}
+                                />
+                            ))
+                        )}
                     </div>
                 </section>
 
                 <section className="panel status-panel">
                     <div className="panel-heading">
                         <div>
-                            <span className="section-label">SYSTEM</span>
-                            <h3>Operational status</h3>
+                            <span className="section-label">DATA STATUS</span>
+                            <h3>Dashboard summary</h3>
                         </div>
-                        <span className="live-pill">LIVE</span>
+                        <span className="live-pill">
+                            {dashboardLoading ? "LOADING" : dashboardError ? "ERROR" : "LIVE"}
+                        </span>
                     </div>
 
                     <div className="system-status">
-                        <StatusItem label="Attendance API" />
-                        <StatusItem label="Face verification" />
-                        <StatusItem label="Location service" />
-                        <StatusItem label="Database" />
+                        <div className="status-item">
+                            <span className="status-check">•</span>
+                            <span>Attendance events today</span>
+                            <strong>
+                                {dashboardLoading
+                                    ? "…"
+                                    : dashboardError
+                                        ? "—"
+                                        : Number(summary.entries || 0) + Number(summary.exits || 0)}
+                            </strong>
+                        </div>
+                        <div className="status-item">
+                            <span className="status-check">•</span>
+                            <span>Production records today</span>
+                            <strong>{metricValue(summary.production_records)}</strong>
+                        </div>
+                        <div className="status-item">
+                            <span className="status-check">•</span>
+                            <span>Reporting timezone</span>
+                            <strong>IST</strong>
+                        </div>
                     </div>
 
                     <div className="last-sync">
-                        <span>Last synchronization</span>
-                        <strong>Just now</strong>
+                        <span>Data refreshed</span>
+                        <strong>
+                            {dashboardData?.generatedAt
+                                ? formatTime(dashboardData.generatedAt)
+                                : dashboardLoading ? "Loading…" : "Unavailable"}
+                        </strong>
                     </div>
+                    <p className="report-note">
+                        Figures reflect saved records; production output is the sum
+                        of actual quantities entered for today.
+                    </p>
                 </section>
             </div>
         </>
