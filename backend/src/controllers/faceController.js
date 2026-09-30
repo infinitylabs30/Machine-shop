@@ -62,13 +62,12 @@ async function registerEmployeeFace(req, res) {
             },
         });
     } catch (error) {
-        console.error("Face registration error:", error);
+        console.error("Face registration failed:", error.message);
 
-        return res.status(500).json({
-            success: false,
-            message: "Face registration failed",
-            error: error.message,
-        });
+return res.status(500).json({
+    success: false,
+    message: "Face registration failed",
+});
     }
 }
 
@@ -125,13 +124,12 @@ async function verifyEmployeeFace(req, res) {
             },
         });
     } catch (error) {
-        console.error("Face verification error:", error);
+       console.error("Face verification failed:", error.message);
 
-        return res.status(500).json({
-            success: false,
-            message: "Face verification failed",
-            error: error.message,
-        });
+return res.status(500).json({
+    success: false,
+    message: "Face verification failed",
+});
     }
 }
 

@@ -1,10 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import ProductionPage from "./ProductionPage";
-const API = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? "http://localhost:5000" : "");
+
+const API =
+    import.meta.env.VITE_API_URL ??
+    (import.meta.env.DEV ? "http://localhost:5000" : "");
 
 function App() {
     const [page, setPage] = useState("dashboard");
+    const [authToken, setAuthToken] = useState("");
+    const [authUser, setAuthUser] = useState(null);
+    const [loginUsername, setLoginUsername] = useState("");
+    const [loginPassword, setLoginPassword] = useState("");
+    const [loginError, setLoginError] = useState("");
+    const [loginLoading, setLoginLoading] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
     const [employeeCode, setEmployeeCode] = useState("");
     const [eventType, setEventType] = useState("ENTRY");
@@ -28,18 +37,74 @@ function App() {
     const canvasRef = useRef(null);
     const streamRef = useRef(null);
 
-    const navItems = [
-        { id: "dashboard", label: "Dashboard", icon: "⌂" },
-        { id: "attendance", label: "Attendance", icon: "◷" },
-        { id: "employees", label: "Employees", icon: "♙" },
-        { id: "production", label: "Production", icon: "▦" },
-        { id: "reports", label: "Reports", icon: "◫" },
-    ];
+    const navItems =
+        authUser?.role === "admin"
+            ? [
+                  { id: "dashboard", label: "Dashboard", icon: "⌂" },
+                  { id: "attendance", label: "Attendance", icon: "◷" },
+                  { id: "employees", label: "Employees", icon: "♙" },
+                  { id: "production", label: "Production", icon: "▦" },
+                  { id: "reports", label: "Reports", icon: "◫" },
+              ]
+            : [{ id: "attendance", label: "Attendance", icon: "◷" }];
+        async function apiFetch(path, options = {}) {
+        const headers = new Headers(options.headers || {});
+        headers.set("Authorization", `Bearer ${authToken}`);
+
+        return fetch(`${API}${path}`, {
+            ...options,
+            headers,
+        });
+    }
+        async function handleLogin(event) {
+        event.preventDefault();
+        setLoginError("");
+        setLoginLoading(true);
+
+        try {
+            const response = await fetch(`${API}/api/auth/login`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    username: loginUsername.trim(),
+                    password: loginPassword,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.success || !data.token || !data.user) {
+                throw new Error(data.message || "Login failed.");
+            }
+
+            setAuthToken(data.token);
+            setAuthUser(data.user);
+            setLoginPassword("");
+            setPage(data.user.role === "admin" ? "dashboard" : "attendance");
+        } catch (error) {
+            setLoginError(error.message || "Unable to sign in.");
+        } finally {
+            setLoginLoading(false);
+        }
+    }
+
+    function handleLogout() {
+        stopCamera();
+        stopRegistrationCamera();
+        setAuthToken("");
+        setAuthUser(null);
+        setLoginUsername("");
+        setLoginPassword("");
+        setLoginError("");
+        setPage("dashboard");
+        setMobileOpen(false);
+    }
 
     useEffect(() => {
         if (cameraActive && videoRef.current && streamRef.current) {
             const video = videoRef.current;
-
             video.srcObject = streamRef.current;
 
             const playVideo = async () => {
@@ -151,13 +216,7 @@ function App() {
         context.save();
         context.translate(canvas.width, 0);
         context.scale(-1, 1);
-        context.drawImage(
-            video,
-            0,
-            0,
-            canvas.width,
-            canvas.height
-        );
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
         context.restore();
 
         return canvas.toDataURL("image/jpeg", 0.72);
@@ -166,7 +225,7 @@ function App() {
     async function markAttendance() {
         setMessage("");
 
-        if (!employeeCode.trim()) {
+        if (authUser?.role === "admin" && !employeeCode.trim()) {
             setMessage("Enter the employee ID first.");
             return;
         }
@@ -192,13 +251,15 @@ function App() {
         setLoading(true);
 
         try {
-            const response = await fetch(`${API}/api/attendance/mark`, {
+            const response = await apiFetch("/api/attendance/mark", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    employeeCode: employeeCode.trim(),
+                    ...(authUser?.role === "admin"
+                        ? { employeeCode: employeeCode.trim() }
+                        : {}),
                     eventType,
                     latitude: location.latitude,
                     longitude: location.longitude,
@@ -287,13 +348,7 @@ function App() {
         context.translate(canvas.width, 0);
         context.scale(-1, 1);
 
-        context.drawImage(
-            video,
-            0,
-            0,
-            canvas.width,
-            canvas.height
-        );
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
         context.restore();
 
@@ -321,7 +376,7 @@ function App() {
         setRegisterMessage("Detecting and registering face…");
 
         try {
-            const response = await fetch(`${API}/api/face/register`, {
+            const response = await apiFetch("/api/face/register", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -358,6 +413,7 @@ function App() {
         if (page === "attendance") {
             return (
                 <AttendancePage
+                    authUser={authUser}
                     employeeCode={employeeCode}
                     setEmployeeCode={setEmployeeCode}
                     eventType={eventType}
@@ -380,7 +436,8 @@ function App() {
         if (page === "employees") {
             return (
                 <EmployeesPage
-                    onRegisterFace={(employee) => {
+                 token={authToken}
+                 onRegisterFace={(employee) => {
                         setRegisteringEmployee(employee);
                         setRegisterMessage("");
                         setRegisterCameraActive(false);
@@ -390,7 +447,7 @@ function App() {
         }
 
         if (page === "production") {
-            return <ProductionPage />;
+            return <ProductionPage token={authToken} />;
         }
 
         if (page === "reports") {
@@ -400,23 +457,29 @@ function App() {
         return <Dashboard setPage={setPage} />;
     }
 
+    if (!authToken || !authUser) {
     return (
-        <div className="app-shell">
+        <LoginPage
+            username={loginUsername}
+            setUsername={setLoginUsername}
+            password={loginPassword}
+            setPassword={setLoginPassword}
+            onSubmit={handleLogin}
+            loading={loginLoading}
+            error={loginError}
+        />
+    );
+}
+
+return (
+    <div className="app-shell">
             <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
                 <div className="brand">
                     <img
-                        src="/precis-logo.png"
+                        src="/precis-logo.avif"
                         alt="PRECIS"
                         className="brand-logo"
-                        onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                        }}
                     />
-
-                    <div className="brand-fallback">
-                        <span>PRECIS</span>
-                        <small>FOUNDRY SYSTEMS</small>
-                    </div>
                 </div>
 
                 <div className="workspace-label">WORKSPACE</div>
@@ -477,12 +540,27 @@ function App() {
                         </button>
 
                         <div className="profile">
-                            <div className="avatar">SA</div>
-                            <div className="profile-copy">
-                                <strong>Administrator</strong>
-                                <span>System Admin</span>
+                            <div className="avatar">
+                                {(authUser?.fullName || authUser?.username || "U")
+                                    .split(/\s+/)
+                                    .slice(0, 2)
+                                    .map((part) => part[0]?.toUpperCase() || "")
+                                    .join("")}
                             </div>
-                            <span className="chevron">⌄</span>
+                            <div className="profile-copy">
+                                <strong>{authUser?.fullName || authUser?.username || "User"}</strong>
+                                <span>
+                                    {authUser?.role === "admin" ? "Administrator" : "Employee"}
+                                </span>
+                            </div>
+                            <button
+                                type="button"
+                                className="logout-button"
+                                onClick={handleLogout}
+                                title="Sign out"
+                            >
+                                Logout
+                            </button>
                         </div>
                     </div>
                 </header>
@@ -629,6 +707,7 @@ function Dashboard({ setPage }) {
 }
 
 function AttendancePage({
+    authUser,
     employeeCode,
     setEmployeeCode,
     eventType,
@@ -681,24 +760,32 @@ function AttendancePage({
                         {cameraActive ? (
                             <>
                                 <video
-    ref={videoRef}
-    autoPlay
-    muted
-    playsInline
-    onLoadedMetadata={(e) => {
-        e.currentTarget.play().catch((error) => {
-            console.error("Camera playback failed:", error);
-        });
-    }}
-    onCanPlay={(e) => {
-        e.currentTarget.play().catch((error) => {
-            console.error("Camera canPlay playback failed:", error);
-        });
-    }}
-/>
+                                    ref={videoRef}
+                                    autoPlay
+                                    muted
+                                    playsInline
+                                    onLoadedMetadata={(e) => {
+                                        e.currentTarget.play().catch((error) => {
+                                            console.error(
+                                                "Camera playback failed:",
+                                                error
+                                            );
+                                        });
+                                    }}
+                                    onCanPlay={(e) => {
+                                        e.currentTarget.play().catch((error) => {
+                                            console.error(
+                                                "Camera canPlay playback failed:",
+                                                error
+                                            );
+                                        });
+                                    }}
+                                />
+
                                 <div className="face-guide">
                                     <span />
                                 </div>
+
                                 <div className="camera-overlay">
                                     Position your face inside the frame
                                 </div>
@@ -723,7 +810,10 @@ function AttendancePage({
                     <canvas ref={canvasRef} hidden />
 
                     {cameraActive && (
-                        <button className="secondary-button full" onClick={stopCamera}>
+                        <button
+                            className="secondary-button full"
+                            onClick={stopCamera}
+                        >
                             Turn off camera
                         </button>
                     )}
@@ -735,13 +825,23 @@ function AttendancePage({
                         <h3>Employee details</h3>
                     </div>
 
-                    <label>Employee ID</label>
-                    <input
-                        className="text-input"
-                        value={employeeCode}
-                        onChange={(e) => setEmployeeCode(e.target.value)}
-                        placeholder="e.g. TEST001"
-                    />
+                    {authUser?.role === "admin" ? (
+                        <>
+                            <label>Employee ID</label>
+                            <input
+                                className="text-input"
+                                value={employeeCode}
+                                onChange={(e) => setEmployeeCode(e.target.value)}
+                                placeholder="e.g. TEST001"
+                            />
+                        </>
+                    ) : (
+                        <div className="signed-in-employee">
+                            <span className="section-label">SIGNED-IN EMPLOYEE</span>
+                            <strong>{authUser?.fullName || authUser?.username}</strong>
+                            <span>{authUser?.employeeCode}</span>
+                        </div>
+                    )}
 
                     <label>Event type</label>
                     <div className="event-switch">
@@ -812,7 +912,7 @@ function AttendancePage({
     );
 }
 
-function EmployeesPage({ onRegisterFace }) {
+function EmployeesPage({ token, onRegisterFace }) {
     const [employees, setEmployees] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -829,7 +929,11 @@ function EmployeesPage({ onRegisterFace }) {
         setError("");
 
         try {
-            const response = await fetch(`${API}/api/employees`);
+            const response = await fetch(`${API}/api/employees`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
             const data = await response.json();
 
             if (!response.ok || !data.success) {
@@ -859,6 +963,7 @@ function EmployeesPage({ onRegisterFace }) {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({
                     employeeCode,
@@ -1022,11 +1127,12 @@ function EmployeesPage({ onRegisterFace }) {
                     >
                         <div className="registration-header">
                             <div>
-                                <span className="section-label">
-                                    WORKFORCE
-                                </span>
+                                <span className="section-label">WORKFORCE</span>
                                 <h2 id="add-employee-title">Add employee</h2>
-                                <p>Create an employee record before face registration.</p>
+                                <p>
+                                    Create an employee record before face
+                                    registration.
+                                </p>
                             </div>
 
                             <button
@@ -1117,7 +1223,6 @@ function EmployeesPage({ onRegisterFace }) {
         </section>
     );
 }
-
 
 function FaceRegistrationModal({
     employee,
@@ -1228,9 +1333,7 @@ function FaceRegistrationModal({
                                     : ""
                             }`}
                         >
-                            <span>
-                                {captureComplete ? "✓" : "02"}
-                            </span>
+                            <span>{captureComplete ? "✓" : "02"}</span>
                             <div>
                                 <strong>Capture</strong>
                                 <small>Create biometric template</small>
@@ -1305,6 +1408,7 @@ function FaceRegistrationModal({
         </div>
     );
 }
+
 function ComingSoon({ title }) {
     return (
         <section className="empty-page panel">
@@ -1377,6 +1481,63 @@ function Verification({ title, status, active, action }) {
                 <button onClick={action}>Detect</button>
             )}
         </div>
+    );
+}
+function LoginPage({
+    username,
+    setUsername,
+    password,
+    setPassword,
+    onSubmit,
+    loading,
+    error,
+}) {
+    return (
+        <main className="login-page">
+            <form className="login-card" onSubmit={onSubmit}>
+                <img
+                    src="/precis-logo.avif"
+                    alt="PRECIS"
+                    className="login-logo"
+                />
+
+                <span className="section-label">FOUNDRY OPERATIONS</span>
+                <h1>Sign in to PRECIS</h1>
+                <p>Use your assigned account to continue.</p>
+
+                {error && (
+                    <div className="login-error" role="alert">
+                        {error}
+                    </div>
+                )}
+
+                <label>
+                    Username
+                    <input
+                        type="text"
+                        autoComplete="username"
+                        value={username}
+                        onChange={(event) => setUsername(event.target.value)}
+                        required
+                    />
+                </label>
+
+                <label>
+                    Password
+                    <input
+                        type="password"
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        required
+                    />
+                </label>
+
+                <button className="primary-button" type="submit" disabled={loading}>
+                    {loading ? "Signing in…" : "Sign in"}
+                </button>
+            </form>
+        </main>
     );
 }
 

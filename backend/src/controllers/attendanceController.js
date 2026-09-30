@@ -14,13 +14,15 @@ async function markAttendance(req, res) {
         } = req.body;
 
         // Validate required input
-        if (!employeeCode || typeof employeeCode !== "string") {
-            return res.status(400).json({
-                success: false,
-                message: "Employee code is required",
-            });
-        }
-
+        if (
+    req.user.role === "admin" &&
+    (!employeeCode || typeof employeeCode !== "string")
+) {
+    return res.status(400).json({
+        success: false,
+        message: "Employee code is required",
+    });
+}
         if (!["ENTRY", "EXIT"].includes(eventType)) {
             return res.status(400).json({
                 success: false,
@@ -52,19 +54,25 @@ async function markAttendance(req, res) {
         }
 
         // Find active employee and registered face template
-        const employeeResult = await pool.query(
-            `
-            SELECT
-                id,
-                employee_code,
-                full_name,
-                face_embedding
-            FROM employees
-            WHERE employee_code = $1
-              AND is_active = TRUE
-            `,
-            [employeeCode.trim()]
-        );
+         const employeeResult =  req.user.role === "employee"
+            ? await pool.query(
+                `
+                SELECT id, employee_code, full_name, face_embedding
+                FROM employees
+                WHERE id = $1
+                    AND is_active = TRUE
+                `,
+                [req.user.employeeId]
+            )
+            : await pool.query(
+                `
+                SELECT id, employee_code, full_name, face_embedding
+                FROM employees
+                WHERE employee_code = $1
+                    AND is_active = TRUE
+                `,
+                [employeeCode.trim().toUpperCase()]
+            );
 
         if (employeeResult.rows.length === 0) {
             return res.status(404).json({
@@ -193,21 +201,15 @@ async function markAttendance(req, res) {
                 faceSimilarity: faceResult.similarity,
             },
         });
-    } catch (error) {
-    console.error("========== ATTENDANCE ERROR ==========");
-    console.error("Message:", error.message);
-    console.error("Code:", error.code);
-    console.error("Detail:", error.detail);
-    console.error("Stack:", error.stack);
-    console.error("======================================");
+        } catch (error) {
+        // Do not log request bodies, face images, database details, or stack traces.
+        console.error("Attendance recording failed:", error.message);
 
-    return res.status(500).json({
-        success: false,
-        message: "Failed to record attendance",
-        error: error.message,
-        code: error.code || null,
-    });
- }
+        return res.status(500).json({
+            success: false,
+            message: "Failed to record attendance",
+        });
+    }
 }
 
 module.exports = {

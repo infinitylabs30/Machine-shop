@@ -21,8 +21,7 @@ async function getEmployees(req, res) {
             employees: result.rows,
         });
     } catch (error) {
-        console.error("Get employees error:", error);
-
+       console.error("Get employees failed:", error.message);
         return res.status(500).json({
             success: false,
             message: "Failed to retrieve employees",
@@ -84,7 +83,7 @@ async function createEmployee(req, res) {
             });
         }
 
-        console.error("Create employee error:", error);
+        console.error("Create employee failed:", error.message);
 
         return res.status(500).json({
             success: false,

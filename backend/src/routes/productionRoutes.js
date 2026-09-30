@@ -9,6 +9,13 @@ const {
     getProductionLocations,
 } = require("../controllers/productionController");
 
+const {
+    requireAuth,
+    requireRole,
+} = require("../middleware/authMiddleware");
+
+router.use(requireAuth, requireRole("admin"));
+
 router.get("/locations", getProductionLocations);
 router.get("/", getProductionEntries);
 router.post("/", createProductionEntry);

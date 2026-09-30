@@ -12,6 +12,7 @@ const attendanceRoutes = require("./routes/attendanceRoutes");
 const faceRoutes = require("./routes/faceRoutes");
 const employeeRoutes = require("./routes/employeeRoutes");
 const productionRoutes = require("./routes/productionRoutes");
+const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use("/api/attendance", attendanceRoutes);
 app.use("/api/face", faceRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/production", productionRoutes);
+app.use("/api/auth", authRoutes);
 
 app.get("/api/health", async (req, res) => {
     try {

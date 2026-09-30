@@ -15,11 +15,13 @@ const allowedFields = [
 ];
 
 function isNonNegativeNumber(value) {
-    return value !== undefined &&
+    return (
+        value !== undefined &&
         value !== null &&
         value !== "" &&
         Number.isFinite(Number(value)) &&
-        Number(value) >= 0;
+        Number(value) >= 0
+    );
 }
 
 exports.createProductionEntry = async (req, res) => {
@@ -38,11 +40,16 @@ exports.createProductionEntry = async (req, res) => {
             remarks = null,
         } = req.body;
 
-        if (!employeeId || !locationId || !productName ||
-            actualQuantity === undefined) {
+        if (
+            !employeeId ||
+            !locationId ||
+            !productName ||
+            actualQuantity === undefined
+        ) {
             return res.status(400).json({
                 success: false,
-                message: "Employee, location, product name, and actual quantity are required.",
+                message:
+                    "Employee, location, product name, and actual quantity are required.",
             });
         }
 
@@ -69,7 +76,8 @@ exports.createProductionEntry = async (req, res) => {
         ) {
             return res.status(400).json({
                 success: false,
-                message: "Accepted plus rejected quantity cannot exceed actual quantity.",
+                message:
+                    "Accepted plus rejected quantity cannot exceed actual quantity.",
             });
         }
 
@@ -111,7 +119,7 @@ exports.createProductionEntry = async (req, res) => {
             entry: result.rows[0],
         });
     } catch (error) {
-        console.error("Create production entry error:", error);
+        console.error("Create production entry failed:", error.message);
 
         return res.status(500).json({
             success: false,
@@ -176,7 +184,7 @@ exports.getProductionEntries = async (req, res) => {
             entries: result.rows,
         });
     } catch (error) {
-        console.error("Get production entries error:", error);
+        console.error("Get production entries failed:", error.message);
 
         return res.status(500).json({
             success: false,
@@ -249,7 +257,7 @@ exports.updateProductionEntry = async (req, res) => {
             entry: result.rows[0],
         });
     } catch (error) {
-        console.error("Update production entry error:", error);
+        console.error("Update production entry failed:", error.message);
 
         return res.status(500).json({
             success: false,
@@ -282,7 +290,7 @@ exports.deleteProductionEntry = async (req, res) => {
             deletedId: result.rows[0].id,
         });
     } catch (error) {
-        console.error("Delete production entry error:", error);
+        console.error("Delete production entry failed:", error.message);
 
         return res.status(500).json({
             success: false,
@@ -290,6 +298,7 @@ exports.deleteProductionEntry = async (req, res) => {
         });
     }
 };
+
 exports.getProductionLocations = async (req, res) => {
     try {
         const result = await pool.query(
@@ -299,13 +308,14 @@ exports.getProductionLocations = async (req, res) => {
              ORDER BY name`
         );
 
-        res.json({
+        return res.json({
             success: true,
             locations: result.rows,
         });
     } catch (error) {
-        console.error("Get production locations error:", error);
-        res.status(500).json({
+        console.error("Get production locations failed:", error.message);
+
+        return res.status(500).json({
             success: false,
             message: "Failed to fetch locations.",
         });

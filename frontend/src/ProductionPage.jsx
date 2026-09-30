@@ -16,7 +16,7 @@ const emptyForm = {
     remarks: "",
 };
 
-export default function ProductionPage() {
+export default function ProductionPage({ token }) {
     const [employees, setEmployees] = useState([]);
     const [locations, setLocations] = useState([]);
     const [entries, setEntries] = useState([]);
@@ -29,9 +29,15 @@ export default function ProductionPage() {
         try {
             const [employeeResponse, locationResponse, productionResponse] =
                 await Promise.all([
-                    fetch(`${API}/api/employees`),
-                    fetch(`${API}/api/production/locations`),
-                    fetch(`${API}/api/production`),
+                    fetch(`${API}/api/employees`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                    }),
+                    fetch(`${API}/api/production/locations`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                    }),
+                    fetch(`${API}/api/production`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                    }),
                 ]);
 
             const [employeeData, locationData, productionData] =
@@ -93,7 +99,10 @@ export default function ProductionPage() {
                     : `${API}/api/production`,
                 {
                     method: editingId ? "PUT" : "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
                     body: JSON.stringify(payload),
                 }
             );
@@ -140,6 +149,7 @@ export default function ProductionPage() {
         try {
             const response = await fetch(`${API}/api/production/${id}`, {
                 method: "DELETE",
+                headers: { Authorization: `Bearer ${token}` },
             });
 
             const data = await response.json();
