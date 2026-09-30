@@ -1706,3 +1706,34 @@ textarea {
     color: #b42318;
     font-size: 0.9rem;
 }
+
+/* Public attendance landing page */
+.public-attendance-page {
+    min-height: 100vh;
+    background: #f5f6f8;
+}
+
+.public-attendance-header {
+    min-height: 76px;
+    padding: 12px clamp(18px, 5vw, 64px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    background: #fff;
+    border-bottom: 1px solid #e8eaed;
+}
+
+.public-attendance-header img {
+    display: block;
+    width: 145px;
+    max-height: 48px;
+    object-fit: contain;
+    object-position: left center;
+}
+
+.public-attendance-content {
+    width: min(100%, 1440px);
+    margin: 0 auto;
+    padding: 28px clamp(16px, 4vw, 48px) 48px;
+}

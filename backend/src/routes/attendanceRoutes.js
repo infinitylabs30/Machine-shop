@@ -1,6 +1,5 @@
 const express = require("express");
 const { markAttendance } = require("../controllers/attendanceController");
-const { requireAuth, requireRole } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
@@ -11,12 +10,7 @@ router.post("/", (req, res) => {
     });
 });
 
-// Attendance requires a signed-in admin or employee.
-router.post(
-    "/mark",
-    requireAuth,
-    requireRole("admin", "employee"),
-    markAttendance
-);
+// Public attendance marking; employee identity is verified by code and face.
+router.post("/mark", markAttendance);
 
 module.exports = router;

@@ -13,16 +13,20 @@ async function markAttendance(req, res) {
             faceImage,
         } = req.body;
 
-        // Validate required input
+        // Employee sessions use their account identity; public/admin users submit a code.
+        const isEmployeeSession = req.user?.role === "employee";
+
         if (
-    req.user.role === "admin" &&
-    (!employeeCode || typeof employeeCode !== "string")
-) {
-    return res.status(400).json({
-        success: false,
-        message: "Employee code is required",
-    });
-}
+            !isEmployeeSession &&
+            (typeof employeeCode !== "string" || !employeeCode.trim())
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Employee code is required",
+            });
+        }
+
+        // Validate required input
         if (!["ENTRY", "EXIT"].includes(eventType)) {
             return res.status(400).json({
                 success: false,
@@ -54,7 +58,7 @@ async function markAttendance(req, res) {
         }
 
         // Find active employee and registered face template
-         const employeeResult =  req.user.role === "employee"
+        const employeeResult = isEmployeeSession
             ? await pool.query(
                 `
                 SELECT id, employee_code, full_name, face_embedding

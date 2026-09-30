@@ -10,6 +10,7 @@ function App() {
     const [page, setPage] = useState("dashboard");
     const [authToken, setAuthToken] = useState("");
     const [authUser, setAuthUser] = useState(null);
+    const [showLogin, setShowLogin] = useState(false);
     const [loginUsername, setLoginUsername] = useState("");
     const [loginPassword, setLoginPassword] = useState("");
     const [loginError, setLoginError] = useState("");
@@ -49,7 +50,9 @@ function App() {
             : [{ id: "attendance", label: "Attendance", icon: "◷" }];
         async function apiFetch(path, options = {}) {
         const headers = new Headers(options.headers || {});
-        headers.set("Authorization", `Bearer ${authToken}`);
+        if (authToken) {
+            headers.set("Authorization", `Bearer ${authToken}`);
+        }
 
         return fetch(`${API}${path}`, {
             ...options,
@@ -82,6 +85,7 @@ function App() {
             setAuthToken(data.token);
             setAuthUser(data.user);
             setLoginPassword("");
+            setShowLogin(false);
             setPage(data.user.role === "admin" ? "dashboard" : "attendance");
         } catch (error) {
             setLoginError(error.message || "Unable to sign in.");
@@ -95,6 +99,7 @@ function App() {
         stopRegistrationCamera();
         setAuthToken("");
         setAuthUser(null);
+        setShowLogin(false);
         setLoginUsername("");
         setLoginPassword("");
         setLoginError("");
@@ -225,7 +230,7 @@ function App() {
     async function markAttendance() {
         setMessage("");
 
-        if (authUser?.role === "admin" && !employeeCode.trim()) {
+        if (authUser?.role !== "employee" && !employeeCode.trim()) {
             setMessage("Enter the employee ID first.");
             return;
         }
@@ -257,7 +262,7 @@ function App() {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    ...(authUser?.role === "admin"
+                    ...(authUser?.role !== "employee"
                         ? { employeeCode: employeeCode.trim() }
                         : {}),
                     eventType,
@@ -458,18 +463,56 @@ function App() {
     }
 
     if (!authToken || !authUser) {
-    return (
-        <LoginPage
-            username={loginUsername}
-            setUsername={setLoginUsername}
-            password={loginPassword}
-            setPassword={setLoginPassword}
-            onSubmit={handleLogin}
-            loading={loginLoading}
-            error={loginError}
-        />
-    );
-}
+        if (showLogin) {
+            return (
+                <LoginPage
+                    username={loginUsername}
+                    setUsername={setLoginUsername}
+                    password={loginPassword}
+                    setPassword={setLoginPassword}
+                    onSubmit={handleLogin}
+                    onCancel={() => setShowLogin(false)}
+                    loading={loginLoading}
+                    error={loginError}
+                />
+            );
+        }
+
+        return (
+            <main className="public-attendance-page">
+                <header className="public-attendance-header">
+                    <img src="/precis-logo.avif" alt="PRECIS" />
+                    <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => setShowLogin(true)}
+                    >
+                        Sign in
+                    </button>
+                </header>
+                <section className="content public-attendance-content">
+                    <AttendancePage
+                        authUser={null}
+                        employeeCode={employeeCode}
+                        setEmployeeCode={setEmployeeCode}
+                        eventType={eventType}
+                        setEventType={setEventType}
+                        cameraActive={cameraActive}
+                        startCamera={startCamera}
+                        stopCamera={stopCamera}
+                        videoRef={videoRef}
+                        canvasRef={canvasRef}
+                        locationStatus={locationStatus}
+                        getLocation={getLocation}
+                        markAttendance={markAttendance}
+                        loading={loading}
+                        message={message}
+                        detectedLocation={detectedLocation}
+                    />
+                </section>
+            </main>
+        );
+    }
 
 return (
     <div className="app-shell">
@@ -825,7 +868,7 @@ function AttendancePage({
                         <h3>Employee details</h3>
                     </div>
 
-                    {authUser?.role === "admin" ? (
+                    {authUser?.role === "admin" || !authUser ? (
                         <>
                             <label>Employee ID</label>
                             <input
@@ -1489,6 +1532,7 @@ function LoginPage({
     password,
     setPassword,
     onSubmit,
+    onCancel,
     loading,
     error,
 }) {
@@ -1535,6 +1579,14 @@ function LoginPage({
 
                 <button className="primary-button" type="submit" disabled={loading}>
                     {loading ? "Signing in…" : "Sign in"}
+                </button>
+                <button
+                    className="secondary-button full"
+                    type="button"
+                    onClick={onCancel}
+                    disabled={loading}
+                >
+                    Back to attendance
                 </button>
             </form>
         </main>
