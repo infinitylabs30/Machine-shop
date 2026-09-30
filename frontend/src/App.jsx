@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import ProductionPage from "./ProductionPage";
+import ReportsPage from "./ReportsPage";
 
 const API =
     import.meta.env.VITE_API_URL ??
@@ -299,22 +300,52 @@ function App() {
     }
 
     async function startRegistrationCamera() {
+        setRegisterMessage("");
+
+        if (!window.isSecureContext) {
+            setRegisterMessage(
+                "Camera access requires HTTPS. Open PRECIS using its secure https:// address."
+            );
+            return;
+        }
+
+        if (!navigator.mediaDevices?.getUserMedia) {
+            setRegisterMessage(
+                "This browser does not support camera access. Try the latest Chrome or Safari."
+            );
+            return;
+        }
+
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
-                    facingMode: "user",
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
+                    facingMode: { ideal: "user" },
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
                 },
                 audio: false,
             });
 
             registerStreamRef.current = stream;
             setRegisterCameraActive(true);
-            setRegisterMessage("");
         } catch (error) {
-            console.error(error);
-            setRegisterMessage("Camera access was not available.");
+            console.error("Registration camera error:", error);
+
+            if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+                setRegisterMessage(
+                    "Camera permission was denied. Allow camera access for this site in your browser settings, then try again."
+                );
+            } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
+                setRegisterMessage("No camera was found on this device.");
+            } else if (error.name === "NotReadableError" || error.name === "TrackStartError") {
+                setRegisterMessage(
+                    "The camera is busy or unavailable. Close other apps using the camera and retry."
+                );
+            } else {
+                setRegisterMessage(
+                    `Could not start the camera (${error.name || "unknown error"}). Check browser permissions and retry.`
+                );
+            }
         }
     }
 
@@ -334,7 +365,13 @@ function App() {
         const video = registerVideoRef.current;
         const canvas = registerCanvasRef.current;
 
-        if (!video || !canvas) {
+        if (
+            !video ||
+            !canvas ||
+            video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
+            !video.videoWidth ||
+            !video.videoHeight
+        ) {
             return null;
         }
 
@@ -373,7 +410,9 @@ function App() {
         const faceImage = captureRegistrationFace();
 
         if (!faceImage) {
-            setRegisterMessage("Unable to capture the face.");
+            setRegisterMessage(
+                "Camera is still starting. Wait until your face appears in the preview, then try again."
+            );
             return;
         }
 
@@ -456,7 +495,7 @@ function App() {
         }
 
         if (page === "reports") {
-            return <ComingSoon title="Reports" />;
+            return <ReportsPage token={authToken} apiBase={API} />;
         }
 
         return <Dashboard setPage={setPage} />;
@@ -767,6 +806,11 @@ function AttendancePage({
     message,
     detectedLocation,
 }) {
+    // Request location automatically when the attendance page opens.
+    useEffect(() => {
+        getLocation();
+    }, []);
+
     return (
         <div className="attendance-page">
             <div className="page-intro">
