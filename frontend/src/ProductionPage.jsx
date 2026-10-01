@@ -332,11 +332,13 @@ export default function ProductionPage({ token, authUser }) {
                         >
                             <option value="">Select employee</option>
 
-                            {employees.map((employee) => (
-                                <option key={employee.id} value={employee.id}>
-                                    {employee.employee_code} — {employee.full_name}
-                                </option>
-                            ))}
+                            {employees
+                                .filter((employee) => employee.employee_code === "PCSP001")
+                                .map((employee) => (
+                                    <option key={employee.id} value={employee.id}>
+                                        {employee.full_name} — {employee.employee_code}
+                                    </option>
+                                ))}
                         </select>
                     </label>
                 )}
